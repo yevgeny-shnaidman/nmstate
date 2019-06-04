@@ -19,14 +19,20 @@ import six
 
 from libnmstate import iplib
 from libnmstate.appliers import linux_bridge
+from libnmstate.error import NmstateNotImplementedError
+from libnmstate.error import NmstateValueError
 from libnmstate.schema import Interface
 from libnmstate.schema import Route
+from libnmstate.schema import DNS
+from libnmstate.nm.route import IPV4_DEFAULT_GATEWAY_DESTINATION
+from libnmstate.nm.route import IPV6_DEFAULT_GATEWAY_DESTINATION
 
 
 BRPORT_OPTIONS = '_brport_options'
 MASTER = '_master'
 MASTER_TYPE = '_master_type'
 ROUTES = '_routes'
+DNS_METADATA = '_dns'
 
 
 def generate_ifaces_metadata(desired_state, current_state):
@@ -64,6 +70,7 @@ def generate_ifaces_metadata(desired_state, current_state):
         set_metadata_func=linux_bridge.set_bridge_ports_metadata
     )
     _generate_route_metadata(desired_state)
+    _generate_dns_metadata(desired_state, current_state)
 
 
 def remove_ifaces_metadata(ifaces_state):
@@ -73,6 +80,8 @@ def remove_ifaces_metadata(ifaces_state):
         iface_state.pop(BRPORT_OPTIONS, None)
         iface_state.get(Interface.IPV4, {}).pop(ROUTES, None)
         iface_state.get(Interface.IPV6, {}).pop(ROUTES, None)
+        iface_state.get(Interface.IPV4, {}).pop(DNS_METADATA, None)
+        iface_state.get(Interface.IPV6, {}).pop(DNS_METADATA, None)
 
 
 def _get_bond_slaves_from_state(iface_state, default=()):
@@ -179,3 +188,90 @@ def _generate_route_metadata(desired_state):
                 iface_state[Interface.IPV6][ROUTES].append(route)
             else:
                 iface_state[Interface.IPV4][ROUTES].append(route)
+
+
+def _generate_dns_metadata(desired_state, current_state):
+    """
+    Save DNS configuration to chose interface as metadata.
+    Raise NmstateValueError if failed to find interface.
+    To handle 3 DNS name server, we need 2+ interfaces when IPv6 server been
+    placed between two IPv4 servers and it also require assigning DNS priority.
+    To simplify workflow, currently we only support at most 2 name servers.
+    """
+    servers = desired_state.config_dns.get(DNS.SERVER, [])
+    searches = desired_state.config_dns.get(DNS.SEARCH, [])
+    if len(servers) > 2:
+        raise NmstateNotImplementedError(
+            'Nmstate only support at most 2 DNS name servers')
+
+    ipv4_server = []
+    ipv6_server = []
+    for server in servers:
+        if iplib.is_ipv6_address(server):
+            ipv6_server.append(server)
+        else:
+            ipv4_server.append(server)
+
+    search_saved = False
+    ipv4_iface, ipv6_iface = _choose_iface_for_dns(desired_state,
+                                                   current_state)
+    print('ifaces', ipv4_iface, ipv6_iface)
+    for iface, family, servers in ((ipv6_iface, Interface.IPV6, ipv6_server),
+                                   (ipv4_iface, Interface.IPV4, ipv4_server)):
+        if servers:
+            if not iface:
+                raise NmstateValueError(
+                    'Failed to find suitable interface for saving DNS '
+                    'name servers: %s' % servers)
+            if iface not in desired_state.interfaces:
+                desired_state.add_interface_with_name_only(iface)
+            dns_meta = {
+                DNS.SERVER: servers,
+                DNS.SEARCH: []
+            }
+            if not search_saved:
+                dns_meta[DNS.SEARCH] = searches
+                search_saved = True
+            iface_state = desired_state.interfaces[iface]
+            if family not in iface_state:
+                iface_state[family] = {DNS_METADATA: dns_meta}
+            else:
+                iface_state[family][DNS_METADATA] = dns_meta
+
+
+def _choose_iface_for_dns(desired_state, current_state):
+    """
+    Find out the interface to store the DNS configuration:
+        * Static gateway configured
+        * DHCP with auto-dns false
+    Return two iface_names, first is for ipv4, second for ipv6.
+    """
+    ipv6_iface = None
+    ipv4_iface = None
+    print(desired_state.config_iface_routes)
+    for iface_name, routes in six.viewitems(desired_state.config_iface_routes):
+        for route in routes:
+            if ipv6_iface and ipv4_iface:
+                return ipv4_iface, ipv6_iface
+            if not ipv6_iface and \
+               route[Route.DESTINATION] == IPV6_DEFAULT_GATEWAY_DESTINATION:
+                ipv6_iface = iface_name
+                continue
+            if not ipv4_iface and \
+               route[Route.DESTINATION] == IPV4_DEFAULT_GATEWAY_DESTINATION:
+                ipv4_iface = iface_name
+                continue
+    if not ipv4_iface:
+        ipv4_iface = _chose_auto_iface_without_auto_dns(
+            Interface.IPV4, desired_state, current_state)
+    if not ipv6_iface:
+        ipv6_iface = _chose_auto_iface_without_auto_dns(
+            Interface.IPV6, desired_state, current_state)
+    return ipv4_iface, ipv6_iface
+
+def _chose_auto_iface_without_auto_dns(family, desired_state, current_state):
+    """
+    Return the interface which has DHCP/Autoconf enabled but auto_dns False.
+    """
+    # The interface is not merged yet, we have to do ourselves.
+    pass

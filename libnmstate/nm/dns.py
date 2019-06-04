@@ -24,6 +24,9 @@ from libnmstate.nm import ipv6 as nm_ipv6
 from libnmstate.schema import DNS
 
 
+# Use 40 for DNS configuration to make sure static DNS configuration take
+# priority over DHCP/Autoconf
+DNS_PRIORITY = 40
 DNS_DEFAULT_PRIORITY_VPN = 50
 DNS_DEFAULT_PRIORITY_OTHER = 100
 
@@ -100,3 +103,11 @@ def get_config():
     if not dns_conf[DNS.SERVER] and dns_conf[DNS.SEARCH]:
         return {}
     return dns_conf
+
+
+def add_dns(setting_ip, dns_state):
+    setting_ip.props.dns_priority = DNS_PRIORITY
+    for server in dns_state.get(DNS.SERVER, []):
+        setting_ip.add_dns(server)
+    for search in dns_state.get(DNS.SEARCH,[]):
+        setting_ip.add_dns_search(server)

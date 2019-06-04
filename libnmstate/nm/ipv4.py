@@ -20,6 +20,7 @@ import socket
 from . import nmclient
 from libnmstate import metadata
 from libnmstate.nm import route as nm_route
+from libnmstate.nm import dns as nm_dns
 from libnmstate.schema import Route
 
 
@@ -58,6 +59,7 @@ def create_setting(config, base_con_profile):
                 nmclient.NM.SETTING_IP4_CONFIG_METHOD_MANUAL)
             _add_addresses(setting_ipv4, config['address'])
         nm_route.add_routes(setting_ipv4, config.get(metadata.ROUTES, []))
+        nm_dns.add_dns(setting_ipv4, config.get(metadata.DNS_METADATA, {}))
     return setting_ipv4
 
 

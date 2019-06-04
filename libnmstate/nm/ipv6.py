@@ -23,6 +23,7 @@ from libnmstate import metadata
 from libnmstate.error import NmstateNotImplementedError
 from libnmstate.nm import nmclient
 from libnmstate.nm import route as nm_route
+from libnmstate.nm import dns as nm_dns
 from libnmstate.schema import Route
 
 
@@ -122,6 +123,7 @@ def create_setting(config, base_con_profile):
             nmclient.NM.SETTING_IP6_CONFIG_METHOD_LINK_LOCAL)
 
     nm_route.add_routes(setting_ip, config.get(metadata.ROUTES, []))
+    nm_dns.add_dns(setting_ip, config.get(metadata.DNS_METADATA, {}))
     return setting_ip
 
 

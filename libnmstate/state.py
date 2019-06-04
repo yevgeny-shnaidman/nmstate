@@ -30,6 +30,7 @@ from libnmstate import metadata
 from libnmstate.error import NmstateValueError
 from libnmstate.error import NmstateVerificationError
 from libnmstate.prettystate import format_desired_current_state_diff
+from libnmstate.schema import DNS
 from libnmstate.schema import Ethernet
 from libnmstate.schema import Interface
 from libnmstate.schema import InterfaceState
@@ -123,6 +124,8 @@ class State(object):
             Route.KEY, {}).get(Route.CONFIG, [])
         self._config_iface_routes = State._index_routes_by_iface(
             self._config_routes)
+        self._config_dns = self._state.get(
+            DNS.KEY, {}).get(DNS.CONFIG, {})
 
     def __eq__(self, other):
         return self.state == other.state
@@ -155,6 +158,10 @@ class State(object):
         Indexed config routes by next hop interface name. Read only.
         """
         return self._config_iface_routes
+
+    @property
+    def config_dns(self):
+        return self._config_dns
 
     def _complement_interface_empty_ip_subtrees(self):
         """ Complement the interfaces states with empty IPv4/IPv6 subtrees. """
@@ -231,6 +238,17 @@ class State(object):
                         {
                             Route.KEY: other_routes
                         }))
+
+    def verify_dns(self, other_state):
+        if self.config_dns != other_state.config_dns:
+            raise NmstateVerificationError(
+                format_desired_current_state_diff(
+                    {
+                        DNS.KEY: self.config_dns
+                    },
+                    {
+                        DNS.KEY: other_state.config_dns
+                    }))
 
     def normalize_for_verification(self):
         self._clean_sanitize_ethernet()
@@ -315,6 +333,24 @@ class State(object):
         self._config_routes = merged_routes
         self._config_iface_routes = State._index_routes_by_iface(
             self._config_routes)
+
+    def merge_dns_config(self, other_state):
+        """
+        If self does contain none DNS configuration, copy it from other_state
+        """
+        if not self.config_dns:
+            self._config_dns = copy.deepcopy(other_state.config_dns)
+
+    def add_interface_with_name_only(self, iface_name):
+        """
+        Add {Interface.NAME: iface_name} to self.interfaces.
+        This allows route and DNS entries referring to interface not defined
+        in desired state.
+        The `State.merge_interfaces()` will fill in the remain interface
+        properties.
+        """
+        if iface_name not in  self.interfaces:
+            self.interfaces[iface_name] = {Interface.NAME: iface_name}
 
     def _remove_absent_interfaces(self):
         ifaces = {}

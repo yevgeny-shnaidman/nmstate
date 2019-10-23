@@ -38,6 +38,7 @@ from .testlib.iproutelib import ip_monitor_assert_stable_link_up
 from .testlib.statelib import show_only
 from .testlib.assertlib import assert_mac_address
 from .testlib.vlan import vlan_interface
+from .testlib.env import is_fedora
 
 TEST_BRIDGE0 = 'linux-br0'
 
@@ -189,12 +190,31 @@ def test_add_port_to_existing_bridge(bridge0_with_port0, port1_up):
     assertlib.assert_state(desired_state)
 
 
-def test_linux_bridge_uses_the_port_mac(port0_up, bridge0_with_port0):
-    port0_name = port0_up[Interface.KEY][0][Interface.NAME]
-    current_state = show_only((TEST_BRIDGE0, port0_name))
-    assert_mac_address(
-        current_state, port0_up[Interface.KEY][0][Interface.MAC]
-    )
+@pytest.mark.xfail(
+    is_fedora(),
+    reason='Fedora 31+ does not use kernel MAC for bridge',
+    raises=AssertionError,
+    strict=True,
+)
+def test_linux_bridge_uses_the_port_mac(port0_up):
+    port_name = port0_up[Interface.KEY][0][Interface.NAME]
+
+    bridge_name = TEST_BRIDGE0
+    bridge_state = _create_bridge_subtree_config((port_name,))
+    # Disable STP to avoid topology changes and the consequence link change.
+    options_subtree = bridge_state[LinuxBridge.OPTIONS_SUBTREE]
+    options_subtree[LinuxBridge.STP_SUBTREE][LinuxBridge.STP_ENABLED] = False
+
+    with linux_bridge(
+        bridge_name, bridge_state, create=False
+    ) as desired_state:
+        del desired_state[Interface.KEY][0][Interface.MAC]
+        libnmstate.apply(desired_state)
+
+        current_state = show_only((TEST_BRIDGE0, port_name))
+        assert_mac_address(
+            current_state, port0_up[Interface.KEY][0][Interface.MAC]
+        )
 
 
 def test_add_linux_bridge_with_empty_ipv6_static_address(port0_up):

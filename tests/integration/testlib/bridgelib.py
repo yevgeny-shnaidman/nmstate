@@ -27,6 +27,14 @@ from libnmstate.schema import InterfaceType
 from libnmstate.schema import LinuxBridge
 
 
+def _get_mac_address(ifname):
+    state = libnmstate.show()
+    for iface_state in state[Interface.KEY]:
+        if iface_state[Interface.NAME] == ifname:
+            return iface_state.get(Interface.MAC)
+    return None
+
+
 @contextmanager
 def linux_bridge(
     name, bridge_subtree_state, extra_iface_state=None, create=True
@@ -43,6 +51,16 @@ def linux_bridge(
             }
         ]
     }
+    if bridge_subtree_state:
+        port_subtree = bridge_subtree_state.get(LinuxBridge.PORT_SUBTREE)
+        if port_subtree:
+            mac_address = _get_mac_address(
+                port_subtree[0][LinuxBridge.PORT_NAME])
+            if mac_address:
+                desired_state[Interface.KEY][0].update(
+                    {Interface.MAC: mac_address}
+                )
+
     if extra_iface_state:
         desired_state[Interface.KEY][0].update(extra_iface_state)
 

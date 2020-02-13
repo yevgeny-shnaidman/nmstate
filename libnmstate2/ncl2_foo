@@ -1,0 +1,21 @@
+#!/usr/bin/python3
+
+import logging
+import sys
+
+from libnmstate2 import NmState
+from libnmstate2.plugins.foo import FooPlugin
+import yaml
+
+logging.basicConfig(level="DEBUG")
+
+ns = NmState(load_default_plugins=False)
+ns.load_plugin(FooPlugin())
+
+try:
+    info = yaml.dump(
+        ns.get().to_dict_full(), default_flow_style=False, sort_keys=False
+    )
+except TypeError:
+    info = yaml.dump(ns.get().to_dict_full(), default_flow_style=False)
+print(info)

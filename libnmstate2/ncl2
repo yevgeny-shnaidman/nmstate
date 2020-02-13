@@ -1,0 +1,27 @@
+#!/usr/bin/python3
+
+import logging
+import sys
+
+from libnmstate2 import NmState, NetState
+import yaml
+
+logging.basicConfig(level="DEBUG")
+
+ns = NmState()
+
+if len(sys.argv) > 1:
+    with open(sys.argv[1]) as fd:
+        net_info = fd.read()
+    print(net_info)
+    ns.set(NetState(yaml.load(net_info, Loader=yaml.SafeLoader)))
+    exit()
+
+
+try:
+    info = yaml.dump(
+        ns.get().to_dict_full(), default_flow_style=False, sort_keys=False
+    )
+except TypeError:
+    info = yaml.dump(ns.get().to_dict_full(), default_flow_style=False)
+print(info)

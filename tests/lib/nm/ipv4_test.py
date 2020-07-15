@@ -59,7 +59,8 @@ def test_create_setting_without_addresses(NM_mock):
     )
 
     assert (
-        ipv4_setting.props.method == NM_mock.SETTING_IP4_CONFIG_METHOD_DISABLED
+        ipv4_setting.props.method
+        == NM_mock.SETTING_IP4_CONFIG_METHOD_LINK_LOCAL
     )
 
 

@@ -77,6 +77,8 @@ def create_setting(config, base_con_profile):
         elif config.get(InterfaceIPv4.ADDRESS):
             setting_ipv4.props.method = NM.SETTING_IP4_CONFIG_METHOD_MANUAL
             _add_addresses(setting_ipv4, config[InterfaceIPv4.ADDRESS])
+        else:
+            setting_ipv4.props.method = NM.SETTING_IP4_CONFIG_METHOD_LINK_LOCAL
         nm_route.add_routes(
             setting_ipv4, config.get(BaseIface.ROUTES_METADATA, [])
         )

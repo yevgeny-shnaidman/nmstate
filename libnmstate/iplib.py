@@ -23,6 +23,9 @@ from libnmstate.error import NmstateValueError
 _IPV6_LINK_LOCAL_NETWORK_PREFIXES = ["fe8", "fe9", "fea", "feb"]
 _IPV6_LINK_LOCAL_NETWORK_PREFIX_LENGTH = 10
 
+_IPV4_LINK_LOCAL_NETWORK_PREFIX = "169.254"
+_IPV4_LINK_LOCAL_NETWORK_PREFIX_LENGTH = 16
+
 KERNEL_MAIN_ROUTE_TABLE_ID = 254
 
 
@@ -31,6 +34,13 @@ def is_ipv6_link_local_addr(ip, prefix):
         ip[: len(_IPV6_LINK_LOCAL_NETWORK_PREFIXES[0])]
         in _IPV6_LINK_LOCAL_NETWORK_PREFIXES
         and prefix >= _IPV6_LINK_LOCAL_NETWORK_PREFIX_LENGTH
+    )
+
+
+def is_ipv4_link_local_addr(ip, prefix):
+    return (
+        ip.startswith(_IPV4_LINK_LOCAL_NETWORK_PREFIX)
+        and prefix >= _IPV4_LINK_LOCAL_NETWORK_PREFIX_LENGTH
     )
 
 

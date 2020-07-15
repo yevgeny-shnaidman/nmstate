@@ -25,6 +25,7 @@ from operator import itemgetter
 from libnmstate.error import NmstateInternalError
 from libnmstate.error import NmstateValueError
 from libnmstate.iplib import is_ipv6_link_local_addr
+from libnmstate.iplib import is_ipv4_link_local_addr
 from libnmstate.iplib import canonicalize_ip_address
 from libnmstate.schema import Interface
 from libnmstate.schema import InterfaceIP
@@ -112,6 +113,9 @@ class IPState:
                 addr
                 for addr in self.addresses
                 if not is_ipv6_link_local_addr(
+                    addr[InterfaceIP.ADDRESS_IP],
+                    addr[InterfaceIP.ADDRESS_PREFIX_LENGTH],
+                ) and not is_ipv4_link_local_addr(
                     addr[InterfaceIP.ADDRESS_IP],
                     addr[InterfaceIP.ADDRESS_PREFIX_LENGTH],
                 )

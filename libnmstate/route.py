@@ -30,7 +30,9 @@ from libnmstate.schema import Route
 
 from .ifaces.base_iface import BaseIface
 from .state import StateEntry
-from .state import state_match
+
+
+DEFAULT_ROUTE_TABLE = 254
 
 
 class RouteEntry(StateEntry):
@@ -70,8 +72,11 @@ class RouteEntry(StateEntry):
 
     def complement_defaults(self):
         if not self.absent:
-            if self.table_id is None:
-                self.table_id = Route.USE_DEFAULT_ROUTE_TABLE
+            if (
+                self.table_id is None
+                or self.table_id == Route.USE_DEFAULT_ROUTE_TABLE
+            ):
+                self.table_id = DEFAULT_ROUTE_TABLE
             if self.metric is None:
                 self.metric = Route.USE_DEFAULT_METRIC
             if self.next_hop_address is None:
@@ -80,7 +85,6 @@ class RouteEntry(StateEntry):
     def _keys(self):
         return (
             self.table_id,
-            self.metric,
             self.destination,
             self.next_hop_address,
             self.next_hop_interface,
@@ -164,6 +168,12 @@ class RouteEntry(StateEntry):
                 self.next_hop_address = canonicalize_ip_address(
                     self.next_hop_address
                 )
+
+    def to_dict(self):
+        info = super().to_dict()
+        if self.metric == Route.USE_DEFAULT_METRIC:
+            del info[Route.METRIC]
+        return info
 
 
 class RouteState:
@@ -254,12 +264,12 @@ class RouteState:
             ifaces=None, des_route_state=None, cur_route_state=cur_route_state
         )
         for iface_name, route_set in self._routes.items():
-            routes_info = [r.to_dict() for r in sorted(route_set)]
-            cur_routes_info = [
-                r.to_dict()
-                for r in sorted(current._routes.get(iface_name, set()))
-            ]
-            if not state_match(routes_info, cur_routes_info):
+            cur_route_set = current._routes.get(iface_name, set())
+            # Kernel might append additional routes. For example, IPv6 default
+            # gateway will generate /128 static direct route
+            if not route_set <= cur_route_set:
+                routes_info = [r.to_dict() for r in sorted(route_set)]
+                cur_routes_info = [r.to_dict() for r in sorted(cur_route_set)]
                 raise NmstateVerificationError(
                     format_desired_current_state_diff(
                         {Route.KEY: {Route.CONFIG: routes_info}},

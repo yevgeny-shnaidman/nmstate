@@ -17,7 +17,6 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 
-from operator import itemgetter
 import socket
 
 from libnmstate import iplib
@@ -35,52 +34,6 @@ IPV6_DEFAULT_GATEWAY_DESTINATION = "::/0"
 # NM require route rule priority been set explicitly, use 30,000 when
 # desire state instruct to use USE_DEFAULT_PRIORITY
 ROUTE_RULE_DEFAULT_PRIORIRY = 30000
-
-
-def get_running_config(applied_configs):
-    """
-    Query routes saved in running profile
-    """
-    routes = []
-    for iface_name, applied_config in applied_configs.items():
-        for ip_profile in (
-            applied_config.get_setting_ip6_config(),
-            applied_config.get_setting_ip4_config(),
-        ):
-            if not ip_profile:
-                continue
-            nm_routes = ip_profile.props.routes
-            gateway = ip_profile.props.gateway
-            if not nm_routes and not gateway:
-                continue
-            default_table_id = ip_profile.props.route_table
-            if gateway:
-                routes.append(
-                    _get_default_route_config(
-                        gateway,
-                        ip_profile.props.route_metric,
-                        default_table_id,
-                        iface_name,
-                    )
-                )
-            # NM supports multiple route table in single profile:
-            # https://bugzilla.redhat.com/show_bug.cgi?id=1436531 The
-            # `ipv4.route-table` and `ipv6.route-table` will be the default
-            # table id for static routes and auto routes. But each static route
-            # can still specify route table id.
-            for nm_route in nm_routes:
-                table_id = _get_per_route_table_id(nm_route, default_table_id)
-                route_entry = _nm_route_to_route(
-                    nm_route, table_id, iface_name
-                )
-                if route_entry:
-                    routes.append(route_entry)
-    routes.sort(
-        key=itemgetter(
-            Route.TABLE_ID, Route.NEXT_HOP_INTERFACE, Route.DESTINATION
-        )
-    )
-    return routes
 
 
 def _get_per_route_table_id(nm_route, default_table_id):
@@ -131,7 +84,11 @@ def _add_specfic_route(setting_ip, route):
     else:
         family = socket.AF_INET
     metric = route.get(Route.METRIC, Route.USE_DEFAULT_METRIC)
-    next_hop = route[Route.NEXT_HOP_ADDRESS]
+    if route[Route.NEXT_HOP_ADDRESS]:
+        next_hop = route[Route.NEXT_HOP_ADDRESS]
+    else:
+        # NM.IPRoute.new() need None instead of ""
+        next_hop = None
     ip_route = NM.IPRoute.new(
         family, destination, prefix_len, next_hop, metric
     )
